@@ -23,6 +23,8 @@ df <- read.csv("./field_seedling_data_set.csv")
 head(df)
 str(df)
 
+tleaf <- read.csv("./field_tleaf_seedlings.csv")
+
 ## Adult conductivity and TLP data - used for reference to seedling values
 # Conductivity was measured on adults in SEKI (no PIPO or SEGI available)
 # TLP values are pulled from literature
@@ -218,6 +220,19 @@ df.sums <- df %>%
 # thermotolerance curves. Multiply leaf area by 100 to make it mm2 instead of cm2
 df.sums$mean.Kl <- ((df.sums$mean.k.g.s.MPa*df.sums$mean.l.mm) / (df.sums$mean.leaf.area.cm2*100))
 
+## Mean and stats for tleaf measured in field 
+tleaf.sum <- tleaf %>% 
+group_by(species,treat) %>%
+dplyr::summarise(mean.tleaf = mean(tleaf, na.rm = TRUE),
+                 median.tleaf = median(tleaf, na.rm=TRUE),
+                 sd.tleaf = sd(tleaf, na.rm = TRUE),
+                 n.tleaf = length(tleaf[!is.na(tleaf)])) %>%
+mutate(se.tleaf = sd.tleaf / sqrt(n.tleaf),
+       lowerci.tleaf = mean.tleaf - qt(1 - (0.05 / 2), n.tleaf - 1) * se.tleaf,
+       upperci.tleaf = mean.tleaf + qt(1 - (0.05 / 2), n.tleaf - 1) * se.tleaf,
+       cv.tleaf = sd.tleaf/mean.tleaf)
+
+## Means and stats for adult datasets 
 df.adult.sum <- adult.df2 %>% 
   group_by(sp, small) %>%
   dplyr::summarise(mean.adult.Ks = mean(k.g.s.MPa, na.rm = TRUE),
@@ -359,7 +374,7 @@ ggplot(data = df.sums, aes(x=treat, y=(-mean.Kl), group=treat)) +
   facet_grid(~species, labeller = labeller(species = sp.labs)) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
   labs(x="Microsite", 
-       y=expression(atop(K[l-native], paste(~ (kg ~ mm^-1 ~ kPa^-1 ~ s^-1))))) +
+       y=expression(atop(K[l-native], paste(~ (g ~ mm^-1 ~ MPa^-1 ~ s^-1))))) +
   theme(axis.text.y=element_text(size=24, color="black"),
         axis.text.x=element_text(size=20, color="black"),
         axis.title=element_text(size=26),
@@ -377,11 +392,12 @@ ggplot(data = df.sums, aes(x=treat, y=(-mean.Kl), group=treat)) +
   scale_fill_met_d("Hokusai3") 
 
 
-
-## TLP
-ggplot(data = df, aes(x = treat, y = TLP.MPa)) +
-  geom_boxplot(na.rm = TRUE, aes(fill = species)) +
-  geom_hline(data = tlp.adult.sum, aes(yintercept = mean.adult.tlp), color = "brown", size = 2) + 
+## TLP - Unhide line 383 to see adult TLP values on plot
+ggplot(data = df.sums, aes(x = treat, y = mean.TLP.MPa)) +
+  geom_bar(na.rm = TRUE, aes(fill = species), stat="identity", position=position_dodge(width=0.5)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.TLP.MPa-se.TLP.MPa, ymax=mean.TLP.MPa+se.TLP.MPa),
+                position=position_dodge(0.5), width=0.3) +
+  # geom_hline(data = tlp.adult.sum, aes(yintercept = mean.adult.tlp), color = "brown", size = 2) + 
   facet_grid(~species, labeller = labeller(species = sp.labs)) +
   theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm")) +
   labs(x = "Microsite", 
@@ -398,17 +414,19 @@ ggplot(data = df, aes(x = treat, y = TLP.MPa)) +
         strip.placement = "outside", 
         strip.text = element_text(size = 20)) +
   guides(fill = "none") +
+  scale_y_continuous(expand=c(0,0), limits=c(-1.8,0)) +
   scale_x_discrete(labels = c("shade" = "Shade", "sun" = "Sun")) +
   scale_fill_met_d("Hokusai3")
 
 
 ## TLeaf
 ggplot(data = tleaf.sum, aes(x = treat, y = mean.tleaf, fill=species)) +
-  geom_bar(stat="identity") +
-  geom_errorbar(aes(ymin=mean.tleaf-se.tleaf, ymax=mean.tleaf+se.tleaf), width=0.2) +
+  geom_bar(na.rm = TRUE, aes(fill = species), stat="identity", position=position_dodge(width=0.5)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.tleaf-se.tleaf, ymax=mean.tleaf+se.tleaf),
+                position=position_dodge(0.5), width=0.3) +
   facet_grid(~species) +
   theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm")) +
-  labs(x = "Burn severity", 
+  labs(x = "Microsite", 
        y= "Leaf Temperature (°C)") +
   theme(axis.text.y = element_text(size = 24, color = "black"),
         axis.text.x = element_text(size = 20, color = "black"),
@@ -422,14 +440,14 @@ ggplot(data = tleaf.sum, aes(x = treat, y = mean.tleaf, fill=species)) +
         strip.placement = "outside", 
         strip.text = element_text(size = 20)) +
   guides(fill = "none") +
-  scale_x_discrete(labels = c("shade" = "Low", "sun" = "High")) +
+  scale_x_discrete(labels = c("shade" = "Shade", "sun" = "Sun")) +
   scale_y_continuous(expand=c(0,0), limits=c(0,40)) +
   scale_fill_met_d("Hokusai3")
 
 
 ## Thermal (tcrit, t50, t95)
 # Reaction norms - Thermal
-df.therm2 <- df.therm.sum %>%
+df.therm2 <- df.sums %>%
   select(site, species, treat, mean.tcrit, mean.t50, mean.t95, se.tcrit, se.t50, 
          se.t95)
 
@@ -474,21 +492,80 @@ ggplot(data = df.therm.long, aes(x=treat, y=mean, color = trait, group=trait)) +
                       labels = c("Tcrit", "T50", "T95"))
 
 
-## Revised for SEGI meeting (5/1/24) - Filter the dataframe to include only Tcrit values
-df_tcrit <- df.therm.long %>% 
-  filter(trait == "tcrit", species %in% c("abco", "pila", "segi"))
+# ## Revised for SEGI meeting (5/1/24) - Filter the dataframe to include only Tcrit values
+# df_tcrit <- df.therm.long %>% 
+#   filter(trait == "tcrit", species %in% c("abco", "pila", "segi"))
+# 
+# 
+# # Plot with filtered dataframe
+# ggplot(data = df_tcrit, aes(x=treat, y=mean, color = trait, group=trait)) +
+#   geom_point(size=7, na.rm=T) +
+#   geom_errorbar(na.rm=T, aes(x=treat, ymin=mean - se, ymax=mean + se, color=trait), 
+#                 width=.2, size=2) +
+#   geom_line(size=2) +
+#   facet_grid(~species, labeller = labeller(species = sp.labs)) +
+#   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+#   labs(x= "Microsite", 
+#        y= "Temp when damage\n occurs (°C)") +
+#   theme(axis.text.y=element_text(size=24, color="black"),
+#         axis.text.x=element_text(size=20, color="black"),
+#         axis.title=element_text(size=26),
+#         axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+#         panel.background = element_rect(fill = NA,colour = "black"),
+#         panel.spacing = unit(0,"mm"), 
+#         axis.line = element_line(color = 'black'),
+#         legend.text=element_text(size=24),
+#         legend.title=element_text(size=26),
+#         strip.placement = "outside", 
+#         strip.text = element_text(size=20)) +
+#   # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+#   scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) +
+#   scale_colour_manual(values = met.brewer("Greek", 3, direction = -1),
+#                       labels = c("Tcrit", "T50", "T95"), guide="none")
+# 
+# 
+# # Revised for CalFIRE proposal
+# df.short <- df.therm.long %>%
+#   filter(species %in% c("abco","pila"))
+# 
+# ggplot(data = df.short, aes(x=treat, y=mean, color = trait, group=trait)) +
+#   geom_point(size=7, na.rm=T) +
+#   geom_errorbar(na.rm=T, aes(x=treat, ymin=mean - se, ymax=mean + se, color=trait), 
+#                 width=.2, size=2) +
+#   geom_line(size=2) +
+#   facet_grid(~species, labeller = labeller(species = sp.labs)) +
+#   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+#   labs(x= "Burn Severity", 
+#        y= "Temperature (°C)", 
+#        color="Temp \nDamage \nThreshold") +
+#   theme(axis.text.y=element_text(size=24, color="black"),
+#         axis.text.x=element_text(size=20, color="black"),
+#         axis.title=element_text(size=26),
+#         axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+#         panel.background = element_rect(fill = NA,colour = "black"),
+#         panel.spacing = unit(0,"mm"), 
+#         axis.line = element_line(color = 'black'),
+#         legend.text=element_text(size=24),
+#         legend.title=element_text(size=26),
+#         strip.placement = "outside", 
+#         strip.text = element_text(size=20)) +
+#   # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+#   scale_x_discrete(labels = c("shade"="Low", "sun" = "High")) +
+#   scale_colour_manual(values = met.brewer("Greek", 3, direction = -1),
+#                       labels = c("Tcrit", "T50", "T95"))
 
 
-# Plot with filtered dataframe
-ggplot(data = df_tcrit, aes(x=treat, y=mean, color = trait, group=trait)) +
-  geom_point(size=7, na.rm=T) +
-  geom_errorbar(na.rm=T, aes(x=treat, ymin=mean - se, ymax=mean + se, color=trait), 
-                width=.2, size=2) +
-  geom_line(size=2) +
-  facet_grid(~species, labeller = labeller(species = sp.labs)) +
+## Safety margins (TSM)
+# Tleaf TSM
+ggplot(data = df.sums, aes(x=treat, y=mean.therm.safety.tcrit.tleaf, fill=species)) +
+  geom_bar(size=7, na.rm = T, stat="identity") + 
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tleaf - se.therm.safety.tcrit.tleaf, 
+                             ymax=mean.therm.safety.tcrit.tleaf + se.therm.safety.tcrit.tleaf), width=0.2) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x= "Microsite", 
-       y= "Temp when damage\n occurs (°C)") +
+  labs(x="Microsite", 
+       y= "Thermal Safety Margin (Tcrit - Max Tleaf, °C)", 
+       fill="Species") +
+  facet_grid(~species, labeller = labeller(species = sp.labs)) +
   theme(axis.text.y=element_text(size=24, color="black"),
         axis.text.x=element_text(size=20, color="black"),
         axis.title=element_text(size=26),
@@ -500,49 +577,159 @@ ggplot(data = df_tcrit, aes(x=treat, y=mean, color = trait, group=trait)) +
         legend.title=element_text(size=26),
         strip.placement = "outside", 
         strip.text = element_text(size=20)) +
-  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
-  scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) +
-  scale_colour_manual(values = met.brewer("Greek", 3, direction = -1),
-                      labels = c("Tcrit", "T50", "T95"), guide="none")
+  guides(fill="none") +
+  scale_y_continuous(expand=c(0,0), limits=c(0, 20)) +
+  scale_fill_manual(values = met.brewer("Hokusai3", 5),
+                    labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI")) +
+  scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) 
 
+# # Revised for CalFIRE proposal
+# df.tsm.short <- df.therm.sum %>%
+#   filter(species %in% c("abco","pila"))
+# 
+# ggplot(data = df.tsm.short, aes(x=treat, y=mean.therm.safety.tcrit.tleaf, fill=species)) +
+#   geom_bar(size=7, na.rm = T, stat="identity") + 
+#   geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tleaf - se.therm.safety.tcrit.tleaf, 
+#                              ymax=mean.therm.safety.tcrit.tleaf + se.therm.safety.tcrit.tleaf), width=0.2) +
+#   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+#   labs(x="Burn Severity", 
+#        y= "Thermal Safety Margin (Tcrit - Max Tleaf, °C)", 
+#        fill="Species") +
+#   facet_grid(~species, labeller = labeller(species = sp.labs)) +
+#   theme(axis.text.y=element_text(size=24, color="black"),
+#         axis.text.x=element_text(size=20, color="black", angle=90),
+#         axis.title=element_text(size=26),
+#         axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+#         panel.background = element_rect(fill = NA,colour = "black"),
+#         panel.spacing = unit(0,"mm"), 
+#         axis.line = element_line(color = 'black'),
+#         legend.text=element_text(size=24),
+#         legend.title=element_text(size=26),
+#         strip.placement = "outside", 
+#         strip.text = element_text(size=20)) +
+#   guides(fill="none") +
+#   scale_y_continuous(expand=c(0,0), limits=c(0, 20)) +
+#   scale_fill_manual(values = met.brewer("Hokusai3", 5),
+#                     labels = c("ABCO", "PILA")) +
+#   scale_x_discrete(labels = c("shade"="Low", "sun" = "High")) 
 
-# Revised for CalFIRE proposal
-df.short <- df.therm.long %>%
-  filter(species %in% c("abco","pila"))
-
-ggplot(data = df.short, aes(x=treat, y=mean, color = trait, group=trait)) +
-  geom_point(size=7, na.rm=T) +
-  geom_errorbar(na.rm=T, aes(x=treat, ymin=mean - se, ymax=mean + se, color=trait), 
-                width=.2, size=2) +
-  geom_line(size=2) +
-  facet_grid(~species, labeller = labeller(species = sp.labs)) +
-  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x= "Burn Severity", 
-       y= "Temperature (°C)", 
-       color="Temp \nDamage \nThreshold") +
-  theme(axis.text.y=element_text(size=24, color="black"),
-        axis.text.x=element_text(size=20, color="black"),
-        axis.title=element_text(size=26),
-        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
-        panel.background = element_rect(fill = NA,colour = "black"),
-        panel.spacing = unit(0,"mm"), 
-        axis.line = element_line(color = 'black'),
-        legend.text=element_text(size=24),
-        legend.title=element_text(size=26),
-        strip.placement = "outside", 
-        strip.text = element_text(size=20)) +
-  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
-  scale_x_discrete(labels = c("shade"="Low", "sun" = "High")) +
-  scale_colour_manual(values = met.brewer("Greek", 3, direction = -1),
-                      labels = c("Tcrit", "T50", "T95"))
-
-
-## Safety margins
-# Ks
-ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.therm.safety.tcrit.tday)) +
-  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+# Temp of Day TSM
+ggplot(data = df.sums, aes(x=treat, y=mean.therm.safety.tcrit.tday, fill=species)) +
+  geom_bar(size=7, na.rm = T, stat="identity") + 
   geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tday - se.therm.safety.tcrit.tday, 
-                             ymax=mean.therm.safety.tcrit.tday + se.therm.safety.tcrit.tday, color=species)) +
+                             ymax=mean.therm.safety.tcrit.tday + se.therm.safety.tcrit.tday), width=0.2) +
+  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+  labs(x="Microsite", 
+       y= "Thermal Safety Margin (Tcrit - Max Tair of Day, °C)", 
+       fill="Species") +
+  facet_grid(~species, labeller = labeller(species = sp.labs)) +
+  theme(axis.text.y=element_text(size=24, color="black"),
+        axis.text.x=element_text(size=20, color="black"),
+        axis.title=element_text(size=26),
+        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+        panel.background = element_rect(fill = NA,colour = "black"),
+        panel.spacing = unit(0,"mm"), 
+        axis.line = element_line(color = 'black'),
+        legend.text=element_text(size=24),
+        legend.title=element_text(size=26),
+        strip.placement = "outside", 
+        strip.text = element_text(size=20)) +
+  guides(fill="none") +
+  scale_y_continuous(expand=c(0,0), limits=c(0, 20)) +
+  scale_fill_manual(values = met.brewer("Hokusai3", 5),
+                    labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI")) +
+  scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) 
+
+# # Revised for CalFIRE
+# ggplot(data = df.tsm.short, aes(x=treat, y=mean.therm.safety.tcrit.tday, fill=species)) +
+#   geom_bar(size=7, na.rm = T, stat="identity") + 
+#   geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tday - se.therm.safety.tcrit.tday, 
+#                              ymax=mean.therm.safety.tcrit.tday + se.therm.safety.tcrit.tday), width=0.2) +
+#   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+#   labs(x="Burn Severity", 
+#        y= "Thermal Safety Margin (Tcrit - Max Tair, °C)", 
+#        fill="Species") +
+#   facet_grid(~species, labeller = labeller(species = sp.labs)) +
+#   theme(axis.text.y=element_text(size=24, color="black"),
+#         axis.text.x=element_text(size=20, color="black"),
+#         axis.title=element_text(size=26),
+#         axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+#         panel.background = element_rect(fill = NA,colour = "black"),
+#         panel.spacing = unit(0,"mm"), 
+#         axis.line = element_line(color = 'black'),
+#         legend.text=element_text(size=24),
+#         legend.title=element_text(size=26),
+#         strip.placement = "outside", 
+#         strip.text = element_text(size=20)) +
+#   guides(fill="none") +
+#   scale_y_continuous(expand=c(0,0), limits=c(0, 20)) +
+#   scale_fill_manual(values = met.brewer("Hokusai3", 5),
+#                     labels = c("ABCO", "PILA")) +
+#   scale_x_discrete(labels = c("shade"="Low", "sun" = "High"))
+
+# Max temp of season TSM
+ggplot(data = df.sums, aes(x=treat, y=mean.therm.safety.tcrit.tseason, fill=species)) +
+  geom_bar(size=7, na.rm = T, stat="identity") + 
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tseason - se.therm.safety.tcrit.tseason, 
+                             ymax=mean.therm.safety.tcrit.tseason + se.therm.safety.tcrit.tseason), width=0.2) +
+  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+  labs(x="Microsite", 
+       y= "Thermal Safety Margin (Tcrit - Max Tair, °C)", 
+       fill="Species") +
+  facet_grid(~species, labeller = labeller(species = sp.labs)) +
+  theme(axis.text.y=element_text(size=24, color="black"),
+        axis.text.x=element_text(size=20, color="black"),
+        axis.title=element_text(size=26),
+        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+        panel.background = element_rect(fill = NA,colour = "black"),
+        panel.spacing = unit(0,"mm"), 
+        axis.line = element_line(color = 'black'),
+        legend.text=element_text(size=24),
+        legend.title=element_text(size=26),
+        strip.placement = "outside", 
+        strip.text = element_text(size=20)) +
+  guides(fill="none") +
+  scale_y_continuous(expand=c(0,0), limits=c(-5, 20)) +
+  scale_fill_manual(values = met.brewer("Hokusai3", 5),
+                    labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI")) +
+  scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) 
+
+
+
+# # Revised for CalFIRE
+# ggplot(data = df.tsm.short, aes(x=treat, y=mean.therm.safety.tcrit.tseason, fill=species)) +
+#   geom_bar(size=7, na.rm = T, stat="identity") + 
+#   geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tseason - se.therm.safety.tcrit.tseason, 
+#                              ymax=mean.therm.safety.tcrit.tseason + se.therm.safety.tcrit.tseason), width=0.2) +
+#   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+#   labs(x="Burn Severity", 
+#        y= "Thermal Safety Margin (Tcrit - Max Tair, °C)", 
+#        fill="Species") +
+#   facet_grid(~species, labeller = labeller(species = sp.labs)) +
+#   theme(axis.text.y=element_text(size=24, color="black"),
+#         axis.text.x=element_text(size=20, color="black", angle=90),
+#         axis.title=element_text(size=26),
+#         axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+#         panel.background = element_rect(fill = NA,colour = "black"),
+#         panel.spacing = unit(0,"mm"), 
+#         axis.line = element_line(color = 'black'),
+#         legend.text=element_text(size=24),
+#         legend.title=element_text(size=26),
+#         strip.placement = "outside", 
+#         strip.text = element_text(size=20)) +
+#   guides(fill="none") +
+#   scale_y_continuous(expand=c(0,0), limits=c(-5, 20)) +
+#   scale_fill_manual(values = met.brewer("Hokusai3", 5),
+#                     labels = c("ABCO", "PILA")) +
+#   scale_x_discrete(labels = c("shade"="Low", "sun" = "High")) 
+
+
+## TSMs versus phys
+# Ks versus TSM (leaf)
+ggplot(data = df.sums, aes(x=(-mean.Ks), y=mean.therm.safety.tcrit.tleaf)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tleaf - se.therm.safety.tcrit.tleaf, 
+                             ymax=mean.therm.safety.tcrit.tleaf + se.therm.safety.tcrit.tleaf, color=species)) +
   geom_errorbar(na.rm=T, aes(xmin=(-mean.Ks) - se.Ks, 
                              xmax=(-mean.Ks) + se.Ks, color=species)) +
   geom_smooth(method="lm", se=F, fullrange = T, linetype="dashed") +
@@ -551,7 +738,7 @@ ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.therm.safety.tcrit.tday)) +
                                  after_stat(p.value.label), sep = "*\", \"*")),
                parse = TRUE, size=7, label.x="right",label.y=0.9) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x=expression(atop(K[s-native], paste(~ (kg ~ m^-1 ~ kPa^-1 ~ s^-1)))), 
+  labs(x=expression(atop(K[s-native], paste(~ (g ~ mm^-1 ~ MPa^-1 ~ s^-1)))), 
        y= "Thermal Safety Margin (Tcrit - Max Tleaf, °C)", 
        color="Species") +
   theme(axis.text.y=element_text(size=24, color="black"),
@@ -569,11 +756,11 @@ ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.therm.safety.tcrit.tday)) +
   scale_colour_manual(values = met.brewer("Hokusai3", 5),
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
-
-ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.therm.margin)) +
+# Ks versus TSM (season)
+ggplot(data = df.sums, aes(x=(-mean.Ks), y=mean.therm.safety.tcrit.tseason)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
-  geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin - se.therm.margin, 
-                             ymax=mean.therm.margin + se.therm.margin, color=species)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tseason - se.therm.safety.tcrit.tseason, 
+                             ymax=mean.therm.safety.tcrit.tseason + se.therm.safety.tcrit.tseason, color=species)) +
   geom_errorbar(na.rm=T, aes(xmin=(-mean.Ks) - se.Ks, 
                              xmax=(-mean.Ks) + se.Ks, color=species)) +
   geom_smooth(method="lm", se=F, fullrange = T, linetype="dashed") +
@@ -582,8 +769,8 @@ ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.therm.margin)) +
                                  after_stat(p.value.label), sep = "*\", \"*")),
                parse = TRUE, size=7, label.x="right",label.y=0.9) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x=expression(atop(K[s-native], paste(~ (kg ~ m^-1 ~ kPa^-1 ~ s^-1)))), 
-       y= "Thermal Margin (T95 - Tcrit, °C)", 
+  labs(x=expression(atop(K[s-native], paste(~ (g ~ mm^-1 ~ MPa^-1 ~ s^-1)))), 
+       y= "Thermal Safety Margin (Tcrit - Max Temp Season, °C)", 
        color="Species") +
   theme(axis.text.y=element_text(size=24, color="black"),
         axis.text.x=element_text(size=20, color="black"),
@@ -601,45 +788,14 @@ ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.therm.margin)) +
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
 
-ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.therm.margin.low)) +
+# TLP versus TSM (leaf)
+ggplot(data = df.sums, aes(x=mean.TLP.MPa, y=mean.therm.safety.tcrit.tleaf)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
-  geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin.low - se.therm.margin.low, 
-                             ymax=mean.therm.margin.low + se.therm.margin.low, color=species)) +
-  geom_errorbar(na.rm=T, aes(xmin=(-mean.Ks) - se.Ks, 
-                             xmax=(-mean.Ks) + se.Ks, color=species)) +
-  geom_smooth(method="lm", se=F, fullrange = T, linetype="dashed") +
-  stat_poly_eq(formula = y ~ x,
-               aes(label = paste(after_stat(rr.label),
-                                 after_stat(p.value.label), sep = "*\", \"*")),
-               parse = TRUE, size=7, label.x="right",label.y=0.9) +
-  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x=expression(atop(K[s-native], paste(~ (kg ~ m^-1 ~ kPa^-1 ~ s^-1)))), 
-       y= "Thermal Margin Low (T50 - Tcrit, °C)", 
-       color="Species") +
-  theme(axis.text.y=element_text(size=24, color="black"),
-        axis.text.x=element_text(size=20, color="black"),
-        axis.title=element_text(size=26),
-        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
-        panel.background = element_rect(fill = NA,colour = "black"),
-        panel.spacing = unit(0,"mm"), 
-        axis.line = element_line(color = 'black'),
-        legend.text=element_text(size=24),
-        legend.title=element_text(size=26),
-        strip.placement = "outside", 
-        strip.text = element_text(size=20)) +
-  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
-  scale_colour_manual(values = met.brewer("Hokusai3", 5),
-                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
-
-
-# TLP
-ggplot(data = df.therm.sum, aes(x=mean.TLP.MPa, y=mean.therm.safety.tcrit)) +
-  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
-  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit - se.therm.safety.tcrit, 
-                             ymax=mean.therm.safety.tcrit + se.therm.safety.tcrit, color=species)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tleaf - se.therm.safety.tcrit.tleaf, 
+                             ymax=mean.therm.safety.tcrit.tleaf + se.therm.safety.tcrit.tleaf, color=species)) +
   geom_errorbar(na.rm=T, aes(xmin=mean.TLP.MPa - se.TLP.MPa, 
                              xmax=mean.TLP.MPa + se.TLP.MPa, color=species)) +
-  geom_smooth(method="lm", se=F, fullrange = T, linetype="dashed") +
+  geom_smooth(method="lm", se=T, fullrange = T, linetype="solid") +
   stat_poly_eq(formula = y ~ x,
                aes(label = paste(after_stat(rr.label),
                                  after_stat(p.value.label), sep = "*\", \"*")),
@@ -663,9 +819,41 @@ ggplot(data = df.therm.sum, aes(x=mean.TLP.MPa, y=mean.therm.safety.tcrit)) +
   scale_colour_manual(values = met.brewer("Hokusai3", 5),
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
+# TLP versus TSM (season)
+ggplot(data = df.sums, aes(x=mean.TLP.MPa, y=mean.therm.safety.tcrit.tseason)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tseason - se.therm.safety.tcrit.tseason, 
+                             ymax=mean.therm.safety.tcrit.tseason + se.therm.safety.tcrit.tseason, color=species)) +
+  geom_errorbar(na.rm=T, aes(xmin=mean.TLP.MPa - se.TLP.MPa, 
+                             xmax=mean.TLP.MPa + se.TLP.MPa, color=species)) +
+  geom_smooth(method="lm", se=F, fullrange = T, linetype="dashed") +
+  stat_poly_eq(formula = y ~ x,
+               aes(label = paste(after_stat(rr.label),
+                                 after_stat(p.value.label), sep = "*\", \"*")),
+               parse = TRUE, size=7, label.x="right",label.y=0.9) +
+  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+  labs(x=expression(Psi[TLP] ~ (MPa)), 
+       y= "Thermal Safety Margin (Tcrit - Max Temp Season, °C)", 
+       color="Species") +
+  theme(axis.text.y=element_text(size=24, color="black"),
+        axis.text.x=element_text(size=20, color="black"),
+        axis.title=element_text(size=26),
+        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+        panel.background = element_rect(fill = NA,colour = "black"),
+        panel.spacing = unit(0,"mm"), 
+        axis.line = element_line(color = 'black'),
+        legend.text=element_text(size=24),
+        legend.title=element_text(size=26),
+        strip.placement = "outside", 
+        strip.text = element_text(size=20)) +
+  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+  scale_colour_manual(values = met.brewer("Hokusai3", 5),
+                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
-# Tcrit versus thermal margins
-ggplot(data = df.therm.sum, aes(x=mean.tcrit, y=mean.therm.margin)) +
+
+## Thermal temp ranges versus phys and tcrit
+# Tcrit versus thermal margins (full)
+ggplot(data = df.sums, aes(x=mean.tcrit, y=mean.therm.margin)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
   geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin - se.therm.margin, 
                              ymax=mean.therm.margin + se.therm.margin, color=species)) +
@@ -695,21 +883,21 @@ ggplot(data = df.therm.sum, aes(x=mean.tcrit, y=mean.therm.margin)) +
   scale_colour_manual(values = met.brewer("Hokusai3", 5),
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
-
-ggplot(data = df.therm.sum, aes(y=mean.tcrit, x=mean.therm.margin.low)) +
+# tcrit versus margins (low)
+ggplot(data = df.sums, aes(x=mean.tcrit, y=mean.therm.margin.low)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
-  geom_errorbar(na.rm=T, aes(xmin=mean.therm.margin.low - se.therm.margin.low, 
-                             xmax=mean.therm.margin.low + se.therm.margin.low, color=species)) +
-  geom_errorbar(na.rm=T, aes(ymin=mean.tcrit - se.tcrit, 
-                             ymax=mean.tcrit + se.tcrit, color=species)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin.low - se.therm.margin.low, 
+                             ymax=mean.therm.margin.low + se.therm.margin.low, color=species)) +
+  geom_errorbar(na.rm=T, aes(xmin=mean.tcrit - se.tcrit, 
+                             xmax=mean.tcrit + se.tcrit, color=species)) +
   geom_smooth(method="lm", se=T, fullrange = T, linetype="solid") +
   stat_poly_eq(formula = y ~ x,
                aes(label = paste(after_stat(rr.label),
                                  after_stat(p.value.label), sep = "*\", \"*")),
                parse = TRUE, size=7, label.x="right",label.y=0.9) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(y="Tcrit (°C)", 
-       x= "Thermal Margin Low (T50 - Tcrit, °C)", 
+  labs(x="Tcrit (°C)", 
+       y= "Thermal Margin Low (T50 - Tcrit, °C)", 
        color="Species") +
   theme(axis.text.y=element_text(size=24, color="black"),
         axis.text.x=element_text(size=20, color="black"),
@@ -726,20 +914,21 @@ ggplot(data = df.therm.sum, aes(y=mean.tcrit, x=mean.therm.margin.low)) +
   scale_colour_manual(values = met.brewer("Hokusai3", 5),
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
-ggplot(data = df.therm.sum, aes(y=mean.tcrit, x=mean.therm.margin.high)) +
+# tcrit versus margins (high)
+ggplot(data = df.sums, aes(x=mean.tcrit, y=mean.therm.margin.high)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
-  geom_errorbar(na.rm=T, aes(xmin=mean.therm.margin.high - se.therm.margin.high, 
-                             xmax=mean.therm.margin.high + se.therm.margin.high, color=species)) +
-  geom_errorbar(na.rm=T, aes(ymin=mean.tcrit - se.tcrit, 
-                             ymax=mean.tcrit + se.tcrit, color=species)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin.high - se.therm.margin.high, 
+                             ymax=mean.therm.margin.high + se.therm.margin.high, color=species)) +
+  geom_errorbar(na.rm=T, aes(xmin=mean.tcrit - se.tcrit, 
+                             xmax=mean.tcrit + se.tcrit, color=species)) +
   geom_smooth(method="lm", se=T, fullrange = T, linetype="solid") +
   stat_poly_eq(formula = y ~ x,
                aes(label = paste(after_stat(rr.label),
                                  after_stat(p.value.label), sep = "*\", \"*")),
                parse = TRUE, size=7, label.x="right",label.y=0.9) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(y="Tcrit (°C)", 
-       x= "Thermal Margin High (T95 - T50, °C)", 
+  labs(x="Tcrit (°C)", 
+       y= "Thermal Margin High (T95 - T50, °C)", 
        color="Species") +
   theme(axis.text.y=element_text(size=24, color="black"),
         axis.text.x=element_text(size=20, color="black"),
@@ -756,16 +945,23 @@ ggplot(data = df.therm.sum, aes(y=mean.tcrit, x=mean.therm.margin.high)) +
   scale_colour_manual(values = met.brewer("Hokusai3", 5),
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
-# Just safety margins (tcrit - max tleaf, tday, tseason)
-ggplot(data = df.therm.sum, aes(x=treat, y=mean.therm.safety.tcrit.tleaf, fill=species)) +
-  geom_bar(size=7, na.rm = T, stat="identity") + 
-  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tleaf - se.therm.safety.tcrit.tleaf, 
-                             ymax=mean.therm.safety.tcrit.tleaf + se.therm.safety.tcrit.tleaf), width=0.2) +
+
+# TLP versus thermal margins (full)
+ggplot(data = df.sums, aes(x=mean.TLP.MPa, y=mean.therm.margin)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin - se.therm.margin, 
+                             ymax=mean.therm.margin + se.therm.margin, color=species)) +
+  geom_errorbar(na.rm=T, aes(xmin=mean.TLP.MPa - se.TLP.MPa, 
+                             xmax=mean.TLP.MPa + se.TLP.MPa, color=species)) +
+  geom_smooth(method="lm", se=T, fullrange = T, linetype="solid") +
+  stat_poly_eq(formula = y ~ x,
+               aes(label = paste(after_stat(rr.label),
+                                 after_stat(p.value.label), sep = "*\", \"*")),
+               parse = TRUE, size=7, label.x="right",label.y=0.9) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x="Microsite", 
-       y= "Thermal Safety Margin (Tcrit - Max Tleaf, °C)", 
-       fill="Species") +
-  facet_grid(~species, labeller = labeller(species = sp.labs)) +
+  labs(x="TLP", 
+       y= "Thermal Margin (T95 - TLP, °C)", 
+       color="Species", shape="Treatment") +
   theme(axis.text.y=element_text(size=24, color="black"),
         axis.text.x=element_text(size=20, color="black"),
         axis.title=element_text(size=26),
@@ -777,51 +973,26 @@ ggplot(data = df.therm.sum, aes(x=treat, y=mean.therm.safety.tcrit.tleaf, fill=s
         legend.title=element_text(size=26),
         strip.placement = "outside", 
         strip.text = element_text(size=20)) +
-  guides(fill="none") +
-  scale_y_continuous(expand=c(0,0), limits=c(0, 20)) +
-  scale_fill_manual(values = met.brewer("Hokusai3", 5),
-                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI")) +
-  scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) 
+  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+  scale_colour_manual(values = met.brewer("Hokusai3", 5),
+                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
-# Revised for CalFIRE proposal
-df.tsm.short <- df.therm.sum %>%
-  filter(species %in% c("abco","pila"))
-
-ggplot(data = df.tsm.short, aes(x=treat, y=mean.therm.safety.tcrit.tleaf, fill=species)) +
-  geom_bar(size=7, na.rm = T, stat="identity") + 
-  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tleaf - se.therm.safety.tcrit.tleaf, 
-                             ymax=mean.therm.safety.tcrit.tleaf + se.therm.safety.tcrit.tleaf), width=0.2) +
+# TLP.MPa versus margins (low)
+ggplot(data = df.sums, aes(x=mean.TLP.MPa, y=mean.therm.margin.low)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin.low - se.therm.margin.low, 
+                             ymax=mean.therm.margin.low + se.therm.margin.low, color=species)) +
+  geom_errorbar(na.rm=T, aes(xmin=mean.TLP.MPa - se.TLP.MPa, 
+                             xmax=mean.TLP.MPa + se.TLP.MPa, color=species)) +
+  geom_smooth(method="lm", se=T, fullrange = T, linetype="solid") +
+  stat_poly_eq(formula = y ~ x,
+               aes(label = paste(after_stat(rr.label),
+                                 after_stat(p.value.label), sep = "*\", \"*")),
+               parse = TRUE, size=7, label.x="right",label.y=0.9) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x="Burn Severity", 
-       y= "Thermal Safety Margin (Tcrit - Max Tleaf, °C)", 
-       fill="Species") +
-  facet_grid(~species, labeller = labeller(species = sp.labs)) +
-  theme(axis.text.y=element_text(size=24, color="black"),
-        axis.text.x=element_text(size=20, color="black", angle=90),
-        axis.title=element_text(size=26),
-        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
-        panel.background = element_rect(fill = NA,colour = "black"),
-        panel.spacing = unit(0,"mm"), 
-        axis.line = element_line(color = 'black'),
-        legend.text=element_text(size=24),
-        legend.title=element_text(size=26),
-        strip.placement = "outside", 
-        strip.text = element_text(size=20)) +
-  guides(fill="none") +
-  scale_y_continuous(expand=c(0,0), limits=c(0, 20)) +
-  scale_fill_manual(values = met.brewer("Hokusai3", 5),
-                    labels = c("ABCO", "PILA")) +
-  scale_x_discrete(labels = c("shade"="Low", "sun" = "High")) 
-
-ggplot(data = df.therm.sum, aes(x=treat, y=mean.therm.safety.tcrit.tday, fill=species)) +
-  geom_bar(size=7, na.rm = T, stat="identity") + 
-  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tday - se.therm.safety.tcrit.tday, 
-                             ymax=mean.therm.safety.tcrit.tday + se.therm.safety.tcrit.tday), width=0.2) +
-  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x="Microsite", 
-       y= "Thermal Safety Margin (Tcrit - Max Tair of Day, °C)", 
-       fill="Species") +
-  facet_grid(~species, labeller = labeller(species = sp.labs)) +
+  labs(x="TLP", 
+       y= "Thermal Margin Low (T50 - TLP, °C)", 
+       color="Species") +
   theme(axis.text.y=element_text(size=24, color="black"),
         axis.text.x=element_text(size=20, color="black"),
         axis.title=element_text(size=26),
@@ -833,22 +1004,26 @@ ggplot(data = df.therm.sum, aes(x=treat, y=mean.therm.safety.tcrit.tday, fill=sp
         legend.title=element_text(size=26),
         strip.placement = "outside", 
         strip.text = element_text(size=20)) +
-  guides(fill="none") +
-  scale_y_continuous(expand=c(0,0), limits=c(0, 20)) +
-  scale_fill_manual(values = met.brewer("Hokusai3", 5),
-                    labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI")) +
-  scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) 
+  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+  scale_colour_manual(values = met.brewer("Hokusai3", 5),
+                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
-# Revised for CalFIRE
-ggplot(data = df.tsm.short, aes(x=treat, y=mean.therm.safety.tcrit.tday, fill=species)) +
-  geom_bar(size=7, na.rm = T, stat="identity") + 
-  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tday - se.therm.safety.tcrit.tday, 
-                             ymax=mean.therm.safety.tcrit.tday + se.therm.safety.tcrit.tday), width=0.2) +
+# TLP.MPa versus margins (high)
+ggplot(data = df.sums, aes(x=mean.TLP.MPa, y=mean.therm.margin.high)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin.high - se.therm.margin.high, 
+                             ymax=mean.therm.margin.high + se.therm.margin.high, color=species)) +
+  geom_errorbar(na.rm=T, aes(xmin=mean.TLP.MPa - se.TLP.MPa, 
+                             xmax=mean.TLP.MPa + se.TLP.MPa, color=species)) +
+  geom_smooth(method="lm", se=T, fullrange = T, linetype="solid") +
+  stat_poly_eq(formula = y ~ x,
+               aes(label = paste(after_stat(rr.label),
+                                 after_stat(p.value.label), sep = "*\", \"*")),
+               parse = TRUE, size=7, label.x="right",label.y=0.9) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x="Burn Severity", 
-       y= "Thermal Safety Margin (Tcrit - Max Tair, °C)", 
-       fill="Species") +
-  facet_grid(~species, labeller = labeller(species = sp.labs)) +
+  labs(x="TLP", 
+       y= "Thermal Margin High (T95 - T50, °C)", 
+       color="Species") +
   theme(axis.text.y=element_text(size=24, color="black"),
         axis.text.x=element_text(size=20, color="black"),
         axis.title=element_text(size=26),
@@ -860,21 +1035,27 @@ ggplot(data = df.tsm.short, aes(x=treat, y=mean.therm.safety.tcrit.tday, fill=sp
         legend.title=element_text(size=26),
         strip.placement = "outside", 
         strip.text = element_text(size=20)) +
-  guides(fill="none") +
-  scale_y_continuous(expand=c(0,0), limits=c(0, 20)) +
-  scale_fill_manual(values = met.brewer("Hokusai3", 5),
-                    labels = c("ABCO", "PILA")) +
-  scale_x_discrete(labels = c("shade"="Low", "sun" = "High"))
+  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+  scale_colour_manual(values = met.brewer("Hokusai3", 5),
+                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
-ggplot(data = df.therm.sum, aes(x=treat, y=mean.therm.safety.tcrit.tseason, fill=species)) +
-  geom_bar(size=7, na.rm = T, stat="identity") + 
-  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tseason - se.therm.safety.tcrit.tseason, 
-                             ymax=mean.therm.safety.tcrit.tseason + se.therm.safety.tcrit.tseason), width=0.2) +
+
+# Ks versus thermal margins (full)
+ggplot(data = df.sums, aes(x=mean.Ks, y=mean.therm.margin)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin - se.therm.margin, 
+                             ymax=mean.therm.margin + se.therm.margin, color=species)) +
+  geom_errorbar(na.rm=T, aes(xmin=mean.Ks - se.Ks, 
+                             xmax=mean.Ks + se.Ks, color=species)) +
+  geom_smooth(method="lm", se=T, fullrange = T, linetype="solid") +
+  stat_poly_eq(formula = y ~ x,
+               aes(label = paste(after_stat(rr.label),
+                                 after_stat(p.value.label), sep = "*\", \"*")),
+               parse = TRUE, size=7, label.x="right",label.y=0.9) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x="Microsite", 
-       y= "Thermal Safety Margin (Tcrit - Max Tair, °C)", 
-       fill="Species") +
-  facet_grid(~species, labeller = labeller(species = sp.labs)) +
+  labs(x="Ks", 
+       y= "Thermal Margin (T95 - TLP, °C)", 
+       color="Species", shape="Treatment") +
   theme(axis.text.y=element_text(size=24, color="black"),
         axis.text.x=element_text(size=20, color="black"),
         axis.title=element_text(size=26),
@@ -886,26 +1067,28 @@ ggplot(data = df.therm.sum, aes(x=treat, y=mean.therm.safety.tcrit.tseason, fill
         legend.title=element_text(size=26),
         strip.placement = "outside", 
         strip.text = element_text(size=20)) +
-  guides(fill="none") +
-  scale_y_continuous(expand=c(0,0), limits=c(-5, 20)) +
-  scale_fill_manual(values = met.brewer("Hokusai3", 5),
-                    labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI")) +
-  scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) 
+  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+  scale_colour_manual(values = met.brewer("Hokusai3", 5),
+                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
-
-
-# Revised for CalFIRE
-ggplot(data = df.tsm.short, aes(x=treat, y=mean.therm.safety.tcrit.tseason, fill=species)) +
-  geom_bar(size=7, na.rm = T, stat="identity") + 
-  geom_errorbar(na.rm=T, aes(ymin=mean.therm.safety.tcrit.tseason - se.therm.safety.tcrit.tseason, 
-                             ymax=mean.therm.safety.tcrit.tseason + se.therm.safety.tcrit.tseason), width=0.2) +
+# Ks versus margins (low)
+ggplot(data = df.sums, aes(x=mean.Ks, y=mean.therm.margin.low)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin.low - se.therm.margin.low, 
+                             ymax=mean.therm.margin.low + se.therm.margin.low, color=species)) +
+  geom_errorbar(na.rm=T, aes(xmin=mean.Ks - se.Ks, 
+                             xmax=mean.Ks + se.Ks, color=species)) +
+  geom_smooth(method="lm", se=T, fullrange = T, linetype="solid") +
+  stat_poly_eq(formula = y ~ x,
+               aes(label = paste(after_stat(rr.label),
+                                 after_stat(p.value.label), sep = "*\", \"*")),
+               parse = TRUE, size=7, label.x="right",label.y=0.9) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x="Burn Severity", 
-       y= "Thermal Safety Margin (Tcrit - Max Tair, °C)", 
-       fill="Species") +
-  facet_grid(~species, labeller = labeller(species = sp.labs)) +
+  labs(x="Ks", 
+       y= "Thermal Margin Low (T50 - TLP, °C)", 
+       color="Species") +
   theme(axis.text.y=element_text(size=24, color="black"),
-        axis.text.x=element_text(size=20, color="black", angle=90),
+        axis.text.x=element_text(size=20, color="black"),
         axis.title=element_text(size=26),
         axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
         panel.background = element_rect(fill = NA,colour = "black"),
@@ -915,15 +1098,45 @@ ggplot(data = df.tsm.short, aes(x=treat, y=mean.therm.safety.tcrit.tseason, fill
         legend.title=element_text(size=26),
         strip.placement = "outside", 
         strip.text = element_text(size=20)) +
-  guides(fill="none") +
-  scale_y_continuous(expand=c(0,0), limits=c(-5, 20)) +
-  scale_fill_manual(values = met.brewer("Hokusai3", 5),
-                    labels = c("ABCO", "PILA")) +
-  scale_x_discrete(labels = c("shade"="Low", "sun" = "High")) 
+  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+  scale_colour_manual(values = met.brewer("Hokusai3", 5),
+                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
+
+# Ks versus margins (high)
+ggplot(data = df.sums, aes(x=mean.Ks, y=mean.therm.margin.high)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.therm.margin.high - se.therm.margin.high, 
+                             ymax=mean.therm.margin.high + se.therm.margin.high, color=species)) +
+  geom_errorbar(na.rm=T, aes(xmin=mean.Ks - se.Ks, 
+                             xmax=mean.Ks + se.Ks, color=species)) +
+  geom_smooth(method="lm", se=T, fullrange = T, linetype="solid") +
+  stat_poly_eq(formula = y ~ x,
+               aes(label = paste(after_stat(rr.label),
+                                 after_stat(p.value.label), sep = "*\", \"*")),
+               parse = TRUE, size=7, label.x="right",label.y=0.9) +
+  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+  labs(x="Ks", 
+       y= "Thermal Margin High (T95 - T50, °C)", 
+       color="Species") +
+  theme(axis.text.y=element_text(size=24, color="black"),
+        axis.text.x=element_text(size=20, color="black"),
+        axis.title=element_text(size=26),
+        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+        panel.background = element_rect(fill = NA,colour = "black"),
+        panel.spacing = unit(0,"mm"), 
+        axis.line = element_line(color = 'black'),
+        legend.text=element_text(size=24),
+        legend.title=element_text(size=26),
+        strip.placement = "outside", 
+        strip.text = element_text(size=20)) +
+  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+  scale_colour_manual(values = met.brewer("Hokusai3", 5),
+                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
+
 
 ## Trade-offs btw heat and drought tolerance
 # TLP vs Tcrit
-ggplot(data = df.therm.sum, aes(y=mean.TLP.MPa, x=mean.tcrit)) +
+ggplot(data = df.sums, aes(y=mean.TLP.MPa, x=mean.tcrit)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
   geom_errorbar(na.rm=T, aes(xmin=mean.tcrit - se.tcrit, 
                              xmax=mean.tcrit + se.tcrit, color=species)) +
@@ -954,7 +1167,7 @@ ggplot(data = df.therm.sum, aes(y=mean.TLP.MPa, x=mean.tcrit)) +
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
 # TLP vs T50
-ggplot(data = df.therm.sum, aes(y=mean.TLP.MPa, x=mean.t50)) +
+ggplot(data = df.sums, aes(y=mean.TLP.MPa, x=mean.t50)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
   geom_errorbar(na.rm=T, aes(xmin=mean.t50 - se.t50, 
                              xmax=mean.t50 + se.t50, color=species)) +
@@ -985,7 +1198,7 @@ ggplot(data = df.therm.sum, aes(y=mean.TLP.MPa, x=mean.t50)) +
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
 # TLP vs T95
-ggplot(data = df.therm.sum, aes(y=mean.TLP.MPa, x=mean.t95)) +
+ggplot(data = df.sums, aes(y=mean.TLP.MPa, x=mean.t95)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
   geom_errorbar(na.rm=T, aes(xmin=mean.t95 - se.t95, 
                              xmax=mean.t95 + se.t95, color=species)) +
@@ -1016,7 +1229,7 @@ ggplot(data = df.therm.sum, aes(y=mean.TLP.MPa, x=mean.t95)) +
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
 # Ks vs Tcrit
-ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.tcrit)) +
+ggplot(data = df.sums, aes(x=(-mean.Ks), y=mean.tcrit)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
   geom_errorbar(na.rm=T, aes(ymin=mean.tcrit - se.tcrit, 
                              ymax=mean.tcrit + se.tcrit, color=species)) +
@@ -1046,8 +1259,39 @@ ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.tcrit)) +
   scale_colour_manual(values = met.brewer("Hokusai3", 5),
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
+# Kl vs Tcrit
+ggplot(data = df.sums, aes(x=(-mean.Kl), y=mean.tcrit)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.tcrit - se.tcrit, 
+                             ymax=mean.tcrit + se.tcrit, color=species)) +
+  # geom_errorbar(na.rm=T, aes(xmin=(-mean.Ks) - se.Ks, 
+  #                            xmax=(-mean.Ks) + se.Ks, color=species)) +
+  geom_smooth(method="lm", se=T, fullrange = T, linetype="solid") +
+  stat_poly_eq(formula = y ~ x,
+               aes(label = paste(after_stat(rr.label),
+                                 after_stat(p.value.label), sep = "*\", \"*")),
+               parse = TRUE, size=7, label.x="left",label.y=0.9) +
+  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+  labs(x=expression(atop(K[l-native], paste(~ (g ~ mm^-1 ~ MPa^-1 ~ s^-1)))), 
+       y= "Tcrit (°C)", 
+       color="Species") +
+  theme(axis.text.y=element_text(size=24, color="black"),
+        axis.text.x=element_text(size=20, color="black"),
+        axis.title=element_text(size=26),
+        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+        panel.background = element_rect(fill = NA,colour = "black"),
+        panel.spacing = unit(0,"mm"), 
+        axis.line = element_line(color = 'black'),
+        legend.text=element_text(size=24),
+        legend.title=element_text(size=26),
+        strip.placement = "outside", 
+        strip.text = element_text(size=20)) +
+  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+  scale_colour_manual(values = met.brewer("Hokusai3", 5),
+                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
+
 # Ks vs T50
-ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.t50)) +
+ggplot(data = df.sums, aes(x=(-mean.Ks), y=mean.t50)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
   geom_errorbar(na.rm=T, aes(ymin=mean.t50 - se.t50, 
                              ymax=mean.t50 + se.t50, color=species)) +
@@ -1077,8 +1321,39 @@ ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.t50)) +
   scale_colour_manual(values = met.brewer("Hokusai3", 5),
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
+# Kl vs T50
+ggplot(data = df.sums, aes(x=(-mean.Kl), y=mean.t50)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.t50 - se.t50, 
+                             ymax=mean.t50 + se.t50, color=species)) +
+  # geom_errorbar(na.rm=T, aes(xmin=(-mean.Ks) - se.Ks, 
+  #                            xmax=(-mean.Ks) + se.Ks, color=species)) +
+  geom_smooth(method="lm", se=F, fullrange = T, linetype="dashed") +
+  stat_poly_eq(formula = y ~ x,
+               aes(label = paste(after_stat(rr.label),
+                                 after_stat(p.value.label), sep = "*\", \"*")),
+               parse = TRUE, size=7, label.x="right",label.y=0.9) +
+  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+  labs(x=expression(atop(K[l-native], paste(~ (g ~ mm^-1 ~ MPa^-1 ~ s^-1)))), 
+       y= "T50 (°C)", 
+       color="Species") +
+  theme(axis.text.y=element_text(size=24, color="black"),
+        axis.text.x=element_text(size=20, color="black"),
+        axis.title=element_text(size=26),
+        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+        panel.background = element_rect(fill = NA,colour = "black"),
+        panel.spacing = unit(0,"mm"), 
+        axis.line = element_line(color = 'black'),
+        legend.text=element_text(size=24),
+        legend.title=element_text(size=26),
+        strip.placement = "outside", 
+        strip.text = element_text(size=20)) +
+  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+  scale_colour_manual(values = met.brewer("Hokusai3", 5),
+                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
+
 # Ks vs T95
-ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.t95)) +
+ggplot(data = df.sums, aes(x=(-mean.Ks), y=mean.t95)) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
   geom_errorbar(na.rm=T, aes(ymin=mean.t95 - se.t95, 
                              ymax=mean.t95 + se.t95, color=species)) +
@@ -1108,8 +1383,39 @@ ggplot(data = df.therm.sum, aes(x=(-mean.Ks), y=mean.t95)) +
   scale_colour_manual(values = met.brewer("Hokusai3", 5),
                       labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
 
+# Kl vs T95
+ggplot(data = df.sums, aes(x=(-mean.Kl), y=mean.t95)) +
+  geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
+  geom_errorbar(na.rm=T, aes(ymin=mean.t95 - se.t95, 
+                             ymax=mean.t95 + se.t95, color=species)) +
+  # geom_errorbar(na.rm=T, aes(xmin=(-mean.Ks) - se.Ks, 
+  #                            xmax=(-mean.Ks) + se.Ks, color=species)) +
+  geom_smooth(method="lm", se=F, fullrange = T, linetype="dashed") +
+  stat_poly_eq(formula = y ~ x,
+               aes(label = paste(after_stat(rr.label),
+                                 after_stat(p.value.label), sep = "*\", \"*")),
+               parse = TRUE, size=7, label.x="right",label.y=0.9) +
+  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+  labs(x=expression(atop(K[l-native], paste(~ (g ~ mm^-1 ~ MPa^-1 ~ s^-1)))), 
+       y= "T95 (°C)", 
+       color="Species") +
+  theme(axis.text.y=element_text(size=24, color="black"),
+        axis.text.x=element_text(size=20, color="black"),
+        axis.title=element_text(size=26),
+        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+        panel.background = element_rect(fill = NA,colour = "black"),
+        panel.spacing = unit(0,"mm"), 
+        axis.line = element_line(color = 'black'),
+        legend.text=element_text(size=24),
+        legend.title=element_text(size=26),
+        strip.placement = "outside", 
+        strip.text = element_text(size=20)) +
+  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
+  scale_colour_manual(values = met.brewer("Hokusai3", 5),
+                      labels = c("ABCO", "CADE", "PILA", "PIPO", "SEGI"))
+
 # TLP vs Ks
-ggplot(data = df.therm.sum, aes(y=mean.TLP.MPa, x=(-mean.Ks))) +
+ggplot(data = df.sums, aes(y=mean.TLP.MPa, x=(-mean.Ks))) +
   geom_point(size=7, na.rm=T, aes(color = species, shape = treat)) +
   geom_errorbar(na.rm=T, aes(xmin=(-mean.Ks) - se.Ks, 
                              xmax=(-mean.Ks) + se.Ks, color=species)) +
