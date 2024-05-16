@@ -14,30 +14,36 @@ library(emmeans)
 library(MetBrewer)
 
 # Set working directory
-setwd("~/Library/CloudStorage/GoogleDrive-kellykerr@ucsb.edu/My Drive/Projects/SEKI Fieldwork/2023/Seedlings")
+setwd("C:/Users/Kelly/Desktop/GitHUB/seki-seedlings/seki-seedlings")
 
-### 2) Load datasets and fix conductivity dataset
-df <- read.csv("./seedling_data_set.csv") 
+
+### 2) Load datasets
+## Seedling data
+df <- read.csv("./field_seedling_data_set.csv") 
 head(df)
 str(df)
 
-tleaf <- read.csv('./tleaf_seedlings.csv')
+## Adult conductivity and TLP data - used for reference to seedling values
+# Conductivity was measured on adults in SEKI (no PIPO or SEGI available)
+# TLP values are pulled from literature
+adult.df <- read.csv("./adult_data.csv")
+adult.df2 <- subset(adult.df, max_type == "native") #subset to only use native conductivity
+adult.tlp <- subset(adult.df, max_type == "tlp") #subset to include the TLP points
 
+## Create new columns/variables in seedling dataframe (df)
+df$therm.safety.tcrit.tleaf <- df$tcrit - df$mean.leaf.temp.c #TSM based on tcrit and leaf temp
+df$therm.safety.tcrit.tday <- df$tcrit - df$max.air.temp.day.c #TSM based on tcrit and air temp from day seedling were collected
+df$therm.safety.tcrit.tseason <- df$tcrit - df$max.air.temp.season.c #TSM based on tcrit and max air temp of the summer 2023
 
-df$therm.safety.tcrit.tleaf <- df$tcrit - df$mean.leaf.temp.c
-df$therm.safety.tcrit.tday <- df$tcrit - df$max.air.temp.day.c
-df$therm.safety.tcrit.tseason <- df$tcrit - df$max.air.temp.season.c
-df$therm.margin <- df$t95 - df$tcrit
-df$therm.margin.low <- df$t50 - df$tcrit
-df$therm.margin.high <- df$t95 - df$t50
+df$therm.margin <- df$t95 - df$tcrit #Range of temps between tcrit and t95
+df$therm.margin.low <- df$t50 - df$tcrit #Range of temps between t50 and tcrit
+df$therm.margin.high <- df$t95 - df$t50 #Range of temps between t95 and t50
 
-adult.df <- read.csv("./adult_cond_data.csv")
-adult.df2 <- subset(adult.df, max_type == "native")
-adult.tlp <- subset(adult.df, max_type == "tlp")
 
 ### 3) Explore raw data
 # Specify the variables you want to plot
-vars <- c("TLP.MPa", "Ks", "t95", "t50", "tcrit", "lma.g.cm2", "al.as.cm2.mm2", "therm.safety.tcrit")  
+vars <- c("TLP.MPa", "Ks", "t95", "t50", "tcrit", "lma.g.cm2", "al.as.cm2.mm2",
+          "therm.safety.tcrit")  
 
 # Create a loop to generate boxplots for each variable
 for (variable in vars) {
@@ -58,9 +64,10 @@ for (variable in vars) {
 }
 
 
-### 4) Graphs for traits
-## Calculate mean, SDs, SEs, and CIs by site, species, and treatment
-df.therm.sum <- df %>% 
+### 4) Summarize data for figures
+## Calculate mean, SDs, SEs, and CIs for variables of interest (A LOT!)
+# by site, species, and treatment
+df.sums <- df %>% 
   group_by(site, species, treat) %>%
   dplyr::summarise(mean.tcrit = mean(tcrit, na.rm = TRUE),
                    median.tcrit = median(tcrit, na.rm=TRUE),
@@ -105,7 +112,35 @@ df.therm.sum <- df %>%
                    mean.Ks = mean(Ks, na.rm = TRUE),
                    median.Ks = median(Ks, na.rm=TRUE),
                    sd.Ks = sd(Ks, na.rm = TRUE),
-                   n.Ks = length(Ks[!is.na(Ks)])) %>%
+                   n.Ks = length(Ks[!is.na(Ks)]),
+                   mean.l.mm = mean(l.mm, na.rm = TRUE),
+                   median.l.mm = median(l.mm, na.rm=TRUE),
+                   sd.l.mm = sd(l.mm, na.rm = TRUE),
+                   n.l.mm = length(l.mm[!is.na(l.mm)]),
+                   mean.k.g.s.MPa = mean(k.g.s.MPa, na.rm = TRUE),
+                   median.k.g.s.MPa = median(k.g.s.MPa, na.rm=TRUE),
+                   sd.k.g.s.MPa = sd(k.g.s.MPa, na.rm = TRUE),
+                   n.k.g.s.MPa = length(k.g.s.MPa[!is.na(k.g.s.MPa)]),
+                   mean.leaf.area.cm2 = mean(leaf.area.cm2, na.rm = TRUE),
+                   median.leaf.area.cm2 = median(leaf.area.cm2, na.rm=TRUE),
+                   sd.leaf.area.cm2 = sd(leaf.area.cm2, na.rm = TRUE),
+                   n.leaf.area.cm2 = length(leaf.area.cm2[!is.na(leaf.area.cm2)]),
+                   mean.al.as.cm2.mm2 = mean(al.as.cm2.mm2, na.rm = TRUE),
+                   median.al.as.cm2.mm2 = median(al.as.cm2.mm2, na.rm=TRUE),
+                   sd.al.as.cm2.mm2 = sd(al.as.cm2.mm2, na.rm = TRUE),
+                   n.al.as.cm2.mm2 = length(al.as.cm2.mm2[!is.na(al.as.cm2.mm2)]),
+                   mean.leaf.stem.weight.ratio = mean(leaf.stem.weight.ratio, na.rm = TRUE),
+                   median.leaf.stem.weight.ratio = median(leaf.stem.weight.ratio, na.rm=TRUE),
+                   sd.leaf.stem.weight.ratio = sd(leaf.stem.weight.ratio, na.rm = TRUE),
+                   n.leaf.stem.weight.ratio = length(leaf.stem.weight.ratio[!is.na(leaf.stem.weight.ratio)]),
+                   mean.mean.leaf.temp.c = mean(mean.leaf.temp.c, na.rm = TRUE),
+                   median.mean.leaf.temp.c = median(mean.leaf.temp.c, na.rm=TRUE),
+                   sd.mean.leaf.temp.c = sd(mean.leaf.temp.c, na.rm = TRUE),
+                   n.mean.leaf.temp.c = length(mean.leaf.temp.c[!is.na(mean.leaf.temp.c)]),
+                   mean.lma.g.cm2 = mean(lma.g.cm2, na.rm = TRUE),
+                   median.lma.g.cm2 = median(lma.g.cm2, na.rm=TRUE),
+                   sd.lma.g.cm2 = sd(lma.g.cm2, na.rm = TRUE),
+                   n.lma.g.cm2 = length(lma.g.cm2[!is.na(lma.g.cm2)])) %>%
   mutate(se.tcrit = sd.tcrit / sqrt(n.tcrit),
          lowerci.tcrit = mean.tcrit - qt(1 - (0.05 / 2), n.tcrit - 1) * se.tcrit,
          upperci.tcrit = mean.tcrit + qt(1 - (0.05 / 2), n.tcrit - 1) * se.tcrit,
@@ -149,7 +184,38 @@ df.therm.sum <- df %>%
          se.Ks = sd.Ks / sqrt(n.Ks),
          lowerci.Ks = mean.Ks - qt(1 - (0.05 / 2), n.Ks - 1) * se.Ks,
          upperci.Ks = mean.Ks + qt(1 - (0.05 / 2), n.Ks - 1) * se.Ks,
-         cv.Ks = sd.Ks/mean.Ks)
+         cv.Ks = sd.Ks/mean.Ks,
+         se.l.mm = sd.l.mm / sqrt(n.l.mm),
+         lowerci.l.mm = mean.l.mm - qt(1 - (0.05 / 2), n.l.mm - 1) * se.l.mm,
+         upperci.l.mm = mean.l.mm + qt(1 - (0.05 / 2), n.l.mm - 1) * se.l.mm,
+         cv.l.mm = sd.l.mm/mean.l.mm,
+         se.k.g.s.MPa = sd.k.g.s.MPa / sqrt(n.k.g.s.MPa),
+         lowerci.k.g.s.MPa = mean.k.g.s.MPa - qt(1 - (0.05 / 2), n.k.g.s.MPa - 1) * se.k.g.s.MPa,
+         upperci.k.g.s.MPa = mean.k.g.s.MPa + qt(1 - (0.05 / 2), n.k.g.s.MPa - 1) * se.k.g.s.MPa,
+         cv.k.g.s.MPa = sd.k.g.s.MPa/mean.k.g.s.MPa,
+         se.leaf.area.cm2 = sd.leaf.area.cm2 / sqrt(n.leaf.area.cm2),
+         lowerci.leaf.area.cm2 = mean.leaf.area.cm2 - qt(1 - (0.05 / 2), n.leaf.area.cm2 - 1) * se.leaf.area.cm2,
+         upperci.leaf.area.cm2 = mean.leaf.area.cm2 + qt(1 - (0.05 / 2), n.leaf.area.cm2 - 1) * se.leaf.area.cm2,
+         cv.leaf.area.cm2 = sd.leaf.area.cm2/mean.leaf.area.cm2,
+         se.al.as.cm2.mm2 = sd.al.as.cm2.mm2 / sqrt(n.al.as.cm2.mm2),
+         lowerci.al.as.cm2.mm2 = mean.al.as.cm2.mm2 - qt(1 - (0.05 / 2), n.al.as.cm2.mm2 - 1) * se.al.as.cm2.mm2,
+         upperci.al.as.cm2.mm2 = mean.al.as.cm2.mm2 + qt(1 - (0.05 / 2), n.al.as.cm2.mm2 - 1) * se.al.as.cm2.mm2,
+         cv.al.as.cm2.mm2 = sd.al.as.cm2.mm2/mean.al.as.cm2.mm2,
+         se.leaf.stem.weight.ratio = sd.leaf.stem.weight.ratio / sqrt(n.leaf.stem.weight.ratio),
+         lowerci.leaf.stem.weight.ratio = mean.leaf.stem.weight.ratio - qt(1 - (0.05 / 2), n.leaf.stem.weight.ratio - 1) * se.leaf.stem.weight.ratio,
+         upperci.leaf.stem.weight.ratio = mean.leaf.stem.weight.ratio + qt(1 - (0.05 / 2), n.leaf.stem.weight.ratio - 1) * se.leaf.stem.weight.ratio,
+         cv.leaf.stem.weight.ratio = sd.leaf.stem.weight.ratio/mean.leaf.stem.weight.ratio,
+         se.lma.g.cm2 = sd.lma.g.cm2 / sqrt(n.lma.g.cm2),
+         lowerci.lma.g.cm2 = mean.lma.g.cm2 - qt(1 - (0.05 / 2), n.lma.g.cm2 - 1) * se.lma.g.cm2,
+         upperci.lma.g.cm2 = mean.lma.g.cm2 + qt(1 - (0.05 / 2), n.lma.g.cm2 - 1) * se.lma.g.cm2,
+         cv.lma.g.cm2 = sd.lma.g.cm2/mean.lma.g.cm2,
+         se.mean.leaf.temp.c = sd.mean.leaf.temp.c / sqrt(n.mean.leaf.temp.c),
+         lowerci.mean.leaf.temp.c = mean.mean.leaf.temp.c - qt(1 - (0.05 / 2), n.mean.leaf.temp.c - 1) * se.mean.leaf.temp.c,
+         upperci.mean.leaf.temp.c = mean.mean.leaf.temp.c + qt(1 - (0.05 / 2), n.mean.leaf.temp.c - 1) * se.mean.leaf.temp.c,
+         cv.mean.leaf.temp.c = sd.mean.leaf.temp.c/mean.mean.leaf.temp.c)
+
+## Calculate Kleaf - estimated because leaf area from Ks samples was used for thermotolerance curves
+df.sums$mean.Kl <- ((df.sums$mean.k.g.s.MPa*df.sums$mean.l.mm) / (df.sums$mean.leaf.area.cm2))
 
 df.adult.sum <- adult.df2 %>% 
   group_by(sp, small) %>%
@@ -173,18 +239,7 @@ tlp.adult.sum <- adult.tlp %>%
          upperci.adult.tlp = mean.adult.tlp + qt(1 - (0.05 / 2), n.adult.tlp - 1) * se.adult.tlp,
          cv.adult.tlp = sd.adult.tlp/mean.adult.tlp)
 
-tleaf.sum <- tleaf %>% 
-  group_by(species,treat) %>%
-  dplyr::summarise(mean.tleaf = mean(tleaf, na.rm = TRUE),
-                   median.tleaf = median(tleaf, na.rm=TRUE),
-                   sd.tleaf = sd(tleaf, na.rm = TRUE),
-                   n.tleaf = length(tleaf[!is.na(tleaf)])) %>%
-  mutate(se.tleaf = sd.tleaf / sqrt(n.tleaf),
-         lowerci.tleaf = mean.tleaf - qt(1 - (0.05 / 2), n.tleaf - 1) * se.tleaf,
-         upperci.tleaf = mean.tleaf + qt(1 - (0.05 / 2), n.tleaf - 1) * se.tleaf,
-         cv.tleaf = sd.tleaf/mean.tleaf)
-
-# Change pop names to match growth data
+# Change pop names of adults to match those in seedlings
 df.adult.sum <- df.adult.sum %>%
   mutate(sp = case_when(
     sp == "ABCO" ~ "abco",
@@ -192,6 +247,7 @@ df.adult.sum <- df.adult.sum %>%
     sp == "CADE" ~ "cade"))
 colnames(df.adult.sum)[colnames(df.adult.sum) %in% c("sp","small")] <- c("species","size")
 
+# Reshape adult dataframe to match seedlings
 df.adult.sum <- df.adult.sum %>%
   pivot_wider(
     id_cols = species,
@@ -200,8 +256,10 @@ df.adult.sum <- df.adult.sum %>%
                     lowerci.adult.Ks, upperci.adult.Ks, cv.adult.Ks)
   )
 
-df.merge <- merge(df.therm.sum, df.adult.sum, by = "species", all = TRUE)
+# Merge adult df with seedlings
+df.merge <- merge(df.sums, df.adult.sum, by = "species", all = TRUE)
 
+# Change names in TLP adult df to match those used in seedlings
 tlp.adult.sum <- tlp.adult.sum %>%
   mutate(sp = case_when(
     sp == "ABCO" ~ "abco",
@@ -211,20 +269,12 @@ tlp.adult.sum <- tlp.adult.sum %>%
     sp == "SEGI" ~ "segi"))
 colnames(tlp.adult.sum)[colnames(tlp.adult.sum) %in% c("sp")] <- c("species")
 
-
-# sjnf2$elev <- factor(sjnf2$elev,levels = c("L","M","H"))
-# sjnf.elev.sum1$elev <- factor(sjnf.elev.sum1$elev,levels = c("L","M","H"))
-# sjnf.elev.sum$elev <- factor(sjnf.elev.sum$elev,levels = c("L","M","H"))
-# multi2$pop.plot <- factor(multi2$pop.plot,levels = c("DIXIE","SJNF","UNCO","WR","UINTA"))
-# multi.pop.sum$pop.plot <- factor(multi.pop.sum$pop.plot,levels = c("DIXIE","SJNF","UNCO","WR","UINTA"))
-# aspen.pop.sum$pop.plot <- factor(aspen.pop.sum$pop.plot,levels = c("DIXIE","SJNF","UNCO","WR","UINTA"))
-# pop.labs <- c("DIXIE","SJNF","UNCO","WR","UINTA")
-# names(pop.labs) <- c("Dixie","San Juan","Uncompaghre","White River","Uinta")
-# formula <- y ~ x #formula to print on plots
-
+# Create labels for species codes to use across all plots
 sp.labs <- c("ABCO", "CADE", "PILA", "PIPO", "SEGI")
 names(sp.labs) <- c("abco", "cade", "pila", "pipo", "segi")
 
+
+### 5) Create figures
 ## Al:As 
 ggplot(data = df, aes(x=treat, y=al.as.cm2.mm2)) +
   geom_boxplot(na.rm=T, aes(fill=species)) +
@@ -272,32 +322,6 @@ ggplot(data = df, aes(x=treat, y=lma.g.cm2)) +
   scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) +
   scale_fill_met_d("Hokusai3")
 
-
-## Ks - Seedlings
-ggplot(data = df, aes(x=treat, y=(-Ks))) +
-  geom_hline(data = df.adult.sum, aes(yintercept = -mean.adult.Ks_large), color = "darkorange", size=2) + #adding mean Ks for adults too
-  geom_hline(data = df.adult.sum, aes(yintercept = -mean.adult.Ks_small), color = "brown", size=2) + #adding mean Ks for adults too
-  geom_boxplot(na.rm=T, aes(fill=species)) +
-  # geom_jitter(aes(color=elev), size=2, shape=15, width=0.1) +
-  facet_grid(~species, labeller = labeller(species = sp.labs)) +
-  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
-  labs(x="Microsite", 
-       y=expression(atop(K[s-native], paste(~ (kg ~ m^-1 ~ kPa^-1 ~ s^-1))))) +
-  theme(axis.text.y=element_text(size=24, color="black"),
-        axis.text.x=element_text(size=20, color="black"),
-        axis.title=element_text(size=26),
-        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
-        panel.background = element_rect(fill = NA,colour = "black"),
-        panel.spacing = unit(0,"mm"), 
-        axis.line = element_line(color = 'black'),
-        legend.text=element_text(size=24),
-        legend.title=element_text(size=26),
-        strip.placement = "outside", 
-        strip.text = element_text(size=20)) +
-  guides(fill="none") +
-  # scale_y_continuous(expand=c(0,0), limits=c(0, .016)) +
-  scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) +
-  scale_fill_met_d("Hokusai3") 
 
 ## Ks - All stages
 ggplot(data = df.merge, aes(x=treat, y=(-mean.Ks), group=treat)) +
