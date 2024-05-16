@@ -214,8 +214,9 @@ df.sums <- df %>%
          upperci.mean.leaf.temp.c = mean.mean.leaf.temp.c + qt(1 - (0.05 / 2), n.mean.leaf.temp.c - 1) * se.mean.leaf.temp.c,
          cv.mean.leaf.temp.c = sd.mean.leaf.temp.c/mean.mean.leaf.temp.c)
 
-## Calculate Kleaf - estimated because leaf area from Ks samples was used for thermotolerance curves
-df.sums$mean.Kl <- ((df.sums$mean.k.g.s.MPa*df.sums$mean.l.mm) / (df.sums$mean.leaf.area.cm2))
+## Calculate Kleaf - estimated because leaf area from Ks samples was used for 
+# thermotolerance curves. Multiply leaf area by 100 to make it mm2 instead of cm2
+df.sums$mean.Kl <- ((df.sums$mean.k.g.s.MPa*df.sums$mean.l.mm) / (df.sums$mean.leaf.area.cm2*100))
 
 df.adult.sum <- adult.df2 %>% 
   group_by(sp, small) %>%
@@ -323,16 +324,18 @@ ggplot(data = df, aes(x=treat, y=lma.g.cm2)) +
   scale_fill_met_d("Hokusai3")
 
 
-## Ks - All stages
+## Ks - Unhide lines 330 and 331 to see large and small adult values
 ggplot(data = df.merge, aes(x=treat, y=(-mean.Ks), group=treat)) +
   geom_bar(na.rm=T, aes(fill=species), stat="identity", position=position_dodge(width=0.5)) +
-  geom_hline(data = df.adult.sum, aes(yintercept = -mean.adult.Ks_large), color = "darkorange", size=2) + #adding mean Ks for adults too
-  geom_hline(data = df.adult.sum, aes(yintercept = -mean.adult.Ks_small), color = "brown", size=2) + #adding mean Ks for adults too
+  geom_errorbar(na.rm=T, aes(ymin=(-mean.Ks-(-se.Ks)), ymax=(-mean.Ks+(-se.Ks))),
+                position=position_dodge(width=0.5), width=0.3) +
+  # geom_hline(data = df.adult.sum, aes(yintercept = -mean.adult.Ks_large), color = "darkorange", size=2) + #adding mean Ks for adults too
+  # geom_hline(data = df.adult.sum, aes(yintercept = -mean.adult.Ks_small), color = "brown", size=2) + #adding mean Ks for adults too
   # geom_jitter(aes(color=elev), size=2, shape=15, width=0.1) +
   facet_grid(~species, labeller = labeller(species = sp.labs)) +
   theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
   labs(x="Microsite", 
-       y=expression(atop(K[s-native], paste(~ (kg ~ m^-1 ~ kPa^-1 ~ s^-1))))) +
+       y=expression(atop(K[s-native], paste(~ (g ~ mm^-1 ~ MPa^-1 ~ s^-1))))) +
   theme(axis.text.y=element_text(size=24, color="black"),
         axis.text.x=element_text(size=20, color="black"),
         axis.title=element_text(size=26),
@@ -345,9 +348,34 @@ ggplot(data = df.merge, aes(x=treat, y=(-mean.Ks), group=treat)) +
         strip.placement = "outside", 
         strip.text = element_text(size=20)) +
   guides(fill="none") +
-  scale_y_continuous(expand=c(0,0), limits=c(0, 1.1)) +
+  scale_y_continuous(expand=c(0,0), limits=c(0, 1.5)) +
   scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) +
   scale_fill_met_d("Hokusai3") 
+
+
+## Kl
+ggplot(data = df.sums, aes(x=treat, y=(-mean.Kl), group=treat)) +
+  geom_bar(na.rm=T, aes(fill=species), stat="identity", position=position_dodge(width=0.5)) +
+  facet_grid(~species, labeller = labeller(species = sp.labs)) +
+  theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm")) +
+  labs(x="Microsite", 
+       y=expression(atop(K[l-native], paste(~ (kg ~ mm^-1 ~ kPa^-1 ~ s^-1))))) +
+  theme(axis.text.y=element_text(size=24, color="black"),
+        axis.text.x=element_text(size=20, color="black"),
+        axis.title=element_text(size=26),
+        axis.title.y = element_text(margin = unit(c(0,3,0,0), "mm")),
+        panel.background = element_rect(fill = NA,colour = "black"),
+        panel.spacing = unit(0,"mm"), 
+        axis.line = element_line(color = 'black'),
+        legend.text=element_text(size=24),
+        legend.title=element_text(size=26),
+        strip.placement = "outside", 
+        strip.text = element_text(size=20)) +
+  guides(fill="none") +
+  scale_y_continuous(expand=c(0,0), limits=c(0, 0.002)) +
+  scale_x_discrete(labels = c("shade"="Shade", "sun" = "Sun")) +
+  scale_fill_met_d("Hokusai3") 
+
 
 
 ## TLP
